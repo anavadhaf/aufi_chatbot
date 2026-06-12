@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { subscribeToToasts } from "../../utils/toast";
 
 const toastStyles = {
-  default: "border-cyan-100/20 bg-white/[0.12] text-cyan-50",
+  default: "border-[#E4AFFF]/20 bg-white/[0.12] text-[#f7e8ff]",
   error: "border-red-200/30 bg-red-950/70 text-red-50",
-  success: "border-emerald-200/30 bg-emerald-950/70 text-emerald-50",
+  success: "border-[#E4AFFF]/30 bg-[#1a0b2d]/80 text-[#f7e8ff]",
 };
 
 export function AppToastProvider({ children }) {
@@ -30,7 +30,7 @@ export function AppToastProvider({ children }) {
       <Toast.Root
         open={open}
         onOpenChange={setOpen}
-        className={`fixed right-4 top-4 z-50 w-[calc(100vw-2rem)] max-w-sm rounded-2xl border p-4 shadow-2xl shadow-cyan-950/50 backdrop-blur-2xl ${
+        className={`fixed right-4 top-4 z-50 w-[calc(100vw-2rem)] max-w-sm rounded-2xl border p-4 shadow-2xl shadow-[#120020]/60 backdrop-blur-2xl ${
           toastStyles[toast?.variant] || toastStyles.default
         }`}
       >

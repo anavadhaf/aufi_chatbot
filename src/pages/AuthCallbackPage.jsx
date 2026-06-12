@@ -98,11 +98,11 @@ export function AuthCallbackPage() {
   }, [login, navigate, searchParams]);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#021B1F] px-5 text-white">
-      <section className="w-full max-w-md rounded-[1.75rem] border border-white/20 bg-white/[0.09] p-8 text-center shadow-2xl shadow-cyan-950/50 backdrop-blur-2xl">
-        <div className="mx-auto mb-6 h-10 w-10 animate-spin rounded-full border-2 border-cyan-100/20 border-t-cyan-100" />
+    <main className="flex min-h-screen items-center justify-center bg-[#08050d] px-5 font-sans text-white">
+      <section className="w-full max-w-md rounded-[1.75rem] border border-[#E4AFFF]/20 bg-white/[0.09] p-8 text-center shadow-2xl shadow-[#120020]/60 backdrop-blur-2xl">
+        <div className="mx-auto mb-6 h-10 w-10 animate-spin rounded-full border-2 border-[#E4AFFF]/20 border-t-[#E4AFFF]" />
         <h1 className="text-2xl font-semibold">Authenticating</h1>
-        <p className="mt-3 text-sm leading-6 text-cyan-50/70">{message}</p>
+        <p className="mt-3 text-sm leading-6 text-[#f7e8ff]/70">{message}</p>
       </section>
     </main>
   );

@@ -7,12 +7,13 @@
 }
 
 html {
-  background: #021b1f;
+  background: #08050d;
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  font-family: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", Inter, system-ui, sans-serif;
 }
 
 #root {

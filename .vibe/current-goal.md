@@ -1,8 +1,10 @@
 # Current Goal
 
-## Phase 1 — Authentication & AI Workspace Foundation
+## Phase 1 — Authentication, AI Workspace & Conversational Experience
 
 ### Completed
+
+#### Authentication Foundation
 
 * Home Page
 * Login Button
@@ -13,52 +15,128 @@
 * Refresh Token Flow
 * Protected Routes
 
-### Current Focus
+---
 
-Build the authenticated AUFI HR Assistant experience.
+## Current Focus
 
-### Requirements
+Build a production-ready AUFI HR Assistant experience with a premium AI workspace, authenticated user context, and a modern conversational interface.
 
-#### Authentication
+---
+
+## Requirements
+
+### Authentication & Session Management
 
 * Secure Token Storage
 * Automatic Token Refresh
 * Session Management
 * Logout Functionality
 * Protected Routes
+* Session Persistence Across Refreshes
+* Automatic Redirect to AI Workspace After Login
+* No Authentication Tokens Visible in UI
 
-#### AI Workspace UI
+---
 
-* Gemini-inspired landing experience
+### AI Workspace UI
+
+* Gemini-inspired workspace experience
 * Black and emerald-green gradient theme
 * AUFI branding
 * Personalized welcome section
-* Central AI prompt input
-* Quick HR action shortcuts
 * Responsive layout
 * Glassmorphism design system
+* Modern enterprise design language
+* Smooth page transitions and animations
 
-#### Initial HR Assistant Features
+---
+
+### Conversational Experience
+
+#### Chat Interface
+
+* Real-time chat experience
+* User message bubbles
+* Assistant message rendering
+* Conversation history
+* Session persistence
+* Auto-scroll to latest message
+
+#### Streaming Responses
+
+* Gemini/ChatGPT-style response generation
+* Progressive text rendering (word-by-word or token streaming)
+* Blinking cursor while generating
+* Smooth response animation
+* Markdown support during streaming
+* No layout shifts during generation
+
+#### Typography System
+
+* Plus Jakarta Sans as the primary font
+* Consistent typography across:
+
+  * User messages
+  * Assistant messages
+  * Input field
+  * Placeholder text
+  * Welcome section
+  * Quick action cards
+
+#### Input Experience
+
+* Compact Gemini-inspired input design
+* Improved spacing and sizing
+* Smooth focus animations
+* Consistent typography while typing
+* Optimized keyboard experience
+
+#### Input Focus Management
+
+* Input remains focused after sending messages
+* Works for both Enter key and Send button
+* User can immediately type the next message
+* Focus remains intact during streaming
+* Focus remains intact after response completion
+* Supports rapid back-to-back messaging
+
+---
+
+### User Context Integration
+
+* Authenticated User Context
+* Employee Profile Context
+* Department Information
+* Role-Based Context
+* User Session Awareness
+* Future Memory Support
+
+---
+
+### Initial HR Assistant Features
 
 * Chat Interface
-* User Context Integration
 * Employee Profile Context
+* User Context Integration
 * Conversation History
 * Session Persistence
+* HR Knowledge Base Access
 
-### Landing Page Experience
+---
 
-After successful OrangeHRM login, users should be redirected directly to the AUFI AI Workspace instead of a token information page.
+## Landing Page Experience
 
-Hero Message:
+After successful OrangeHRM authentication, users should be redirected directly to the AUFI AI Workspace.
 
-> How can AUFI assist you today?
+### Welcome Message
 
-Prompt Placeholder:
+> Hi! Need help with your HR tasks?
 
-> Ask about leave requests, attendance, employee information, company policies, onboarding, or HR workflows...
+### Prompt Placeholder
 
-Quick Actions:
+> Ask about leave, attendance, employees, policies, onboarding, or HR workflows...
+
+### Quick Actions
 
 * Check Leave Balance
 * Apply for Leave
@@ -67,12 +145,41 @@ Quick Actions:
 * Company Policies
 * Team Information
 
-### Success Criteria
+---
+
+## Success Criteria
+
+### Authentication
 
 * User can login through OrangeHRM
-* User is automatically redirected to the AUFI AI Workspace
-* No authentication tokens are visible in the UI
-* Protected routes work correctly
-* Session persists across page refreshes
-* User can start interacting with the HR assistant immediately after login
-* UI matches the AUFI dark enterprise design language
+* Secure authenticated session is established
+* Protected routes function correctly
+* Session persists across browser refreshes
+* Logout works correctly
+
+### Workspace Experience
+
+* User is redirected directly to AUFI Workspace after login
+* No token information is displayed anywhere in the UI
+* Workspace follows AUFI enterprise design language
+* Fully responsive across devices
+
+### Chat Experience
+
+* User can immediately start chatting after login
+* Responses stream smoothly like Gemini/ChatGPT
+* Plus Jakarta Sans is used throughout the chat experience
+* Input remains focused after sending messages
+* Users can send consecutive messages without reselecting the input field
+* Chat feels fast, modern, and production-ready
+
+### Foundation for Phase 2
+
+The platform is ready for:
+
+* OrangeHRM API integrations
+* Tool calling
+* User memory
+* Multi-session conversations
+* Advanced HR workflows
+* Personalized AI assistance
