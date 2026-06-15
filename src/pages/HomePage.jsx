@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { sendChatMessage } from "../services/chat.service";
+import { ensureValidAccessToken, SessionExpiredError } from "../services/session.service";
 import { useAuthStore } from "../store/auth.store";
 import { showToast } from "../utils/toast";
 
@@ -204,7 +205,6 @@ function MarkdownMessage({ content }) {
 
 export function HomePage() {
   const logout = useAuthStore((state) => state.logout);
-  const authToken = useAuthStore((state) => state.accessToken);
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [chatHistory, setChatHistory] = useState([]);
   const [inputValue, setInputValue] = useState("");
@@ -293,6 +293,7 @@ export function HomePage() {
     focusInputSoon();
 
     try {
+      const authToken = await ensureValidAccessToken();
       const reply = await sendChatMessage({
         message: trimmedMessage,
         authToken,
@@ -308,6 +309,11 @@ export function HomePage() {
       await streamAssistantReply(assistantMessageId, reply);
     } catch (error) {
       console.error("Unable to send chat message:", error);
+      if (error instanceof SessionExpiredError) {
+        setPendingReplies((count) => Math.max(0, count - 1));
+        return;
+      }
+
       showToast({
         title: "Message not sent",
         description: "AUFI could not reach the chat service. Please try again.",
