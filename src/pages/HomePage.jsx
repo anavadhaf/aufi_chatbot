@@ -4,18 +4,23 @@ import {
   CalendarCheck,
   CalendarPlus,
   Clock3,
+  History,
   LogOut,
   MessageSquarePlus,
   Sparkles,
   UsersRound,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { sendChatMessage } from "../services/chat.service";
 import { ensureValidAccessToken, SessionExpiredError } from "../services/session.service";
+import { getSupabaseClient, isSupabaseConfigured } from "../lib/supabaseClient";
 import { useAuthStore } from "../store/auth.store";
 import { showToast } from "../utils/toast";
 
 const STREAM_CHUNK_DELAY_MS = 28;
+const ORANGEHRM_PROFILE_URL = "/orange-api/web/index.php/api/v2/pim/myself";
+const SESSION_TITLE_MAX_LENGTH = 30;
 
 const quickActions = [
   { label: "Check Leave Balance", icon: CalendarCheck },
@@ -30,6 +35,27 @@ function wait(milliseconds) {
   return new Promise((resolve) => {
     window.setTimeout(resolve, milliseconds);
   });
+}
+
+function truncateSessionTitle(message) {
+  const trimmedMessage = message.trim();
+
+  if (trimmedMessage.length <= SESSION_TITLE_MAX_LENGTH) {
+    return trimmedMessage;
+  }
+
+  return `${trimmedMessage.slice(0, SESSION_TITLE_MAX_LENGTH).trimEnd()}...`;
+}
+
+function formatSessionDate(createdAt) {
+  if (!createdAt) {
+    return "Recent";
+  }
+
+  return new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+  }).format(new Date(createdAt));
 }
 
 function splitIntoStreamChunks(text) {
@@ -205,21 +231,25 @@ function MarkdownMessage({ content }) {
 
 export function HomePage() {
   const logout = useAuthStore((state) => state.logout);
-  const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
-  const [chatHistory, setChatHistory] = useState([]);
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [sessionsList, setSessionsList] = useState([]);
+  const [currentMessages, setCurrentMessages] = useState([]);
   const [inputValue, setInputValue] = useState("");
-  const [pendingReplies, setPendingReplies] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const formRef = useRef(null);
   const keepInputFocusedRef = useRef(false);
   const mountedRef = useRef(true);
 
-  const hasStartedChat = chatHistory.length > 0;
+  const hasStartedChat = currentMessages.length > 0;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory, pendingReplies]);
+  }, [currentMessages, isTyping]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -233,7 +263,48 @@ export function HomePage() {
     if (keepInputFocusedRef.current) {
       inputRef.current?.focus({ preventScroll: true });
     }
-  }, [chatHistory, pendingReplies]);
+  }, [currentMessages, isTyping]);
+
+  useEffect(() => {
+    const bootstrapChat = async () => {
+      if (!accessToken) {
+        if (mountedRef.current) {
+          setCurrentUserId(null);
+          setActiveSessionId(null);
+          setSessionsList([]);
+          setCurrentMessages([]);
+          setIsTyping(false);
+        }
+        return;
+      }
+
+      try {
+        const authToken = await ensureValidAccessToken();
+        const userId = await fetchOrangeHrmUserIdentity(authToken);
+        const sessions = await fetchPastSessions(userId);
+
+        if (!mountedRef.current) {
+          return;
+        }
+
+        setCurrentUserId(userId);
+        setSessionsList(sessions);
+      } catch (error) {
+        if (error instanceof SessionExpiredError || !mountedRef.current) {
+          return;
+        }
+
+        console.error("Unable to initialize chat:", error);
+        showToast({
+          title: "Chat unavailable",
+          description: "We couldn't load your OrangeHRM profile or past chats.",
+          variant: "error",
+        });
+      }
+    };
+
+    bootstrapChat();
+  }, [accessToken]);
 
   const focusInputSoon = () => {
     if (!keepInputFocusedRef.current) {
@@ -245,6 +316,119 @@ export function HomePage() {
     });
   };
 
+  const fetchOrangeHrmUserIdentity = async (authToken) => {
+    const response = await fetch(ORANGEHRM_PROFILE_URL, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`OrangeHRM profile request failed with status ${response.status}`);
+    }
+
+    const result = await response.json();
+    const userId = result?.data?.empNumber;
+
+    if (typeof userId !== "number") {
+      throw new Error("OrangeHRM profile response did not include a valid empNumber.");
+    }
+
+    return userId;
+  };
+
+  const fetchPastSessions = async (userId) => {
+    if (!isSupabaseConfigured) {
+      return [];
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("chat_sessions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    return data ?? [];
+  };
+
+  const fetchSessionMessages = async (sessionId) => {
+    if (!isSupabaseConfigured) {
+      return [];
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("chat_messages")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    return (data ?? []).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: message.content,
+    }));
+  };
+
+  const startNewSession = async (userId, firstMessage) => {
+    if (!isSupabaseConfigured) {
+      return crypto.randomUUID();
+    }
+
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from("chat_sessions")
+      .insert({
+        user_id: userId,
+        title: truncateSessionTitle(firstMessage),
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    return data.id;
+  };
+
+  const saveMessage = async (sessionId, role, content) => {
+    if (!isSupabaseConfigured) {
+      return null;
+    }
+
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from("chat_messages").insert({
+      session_id: sessionId,
+      role,
+      content,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    return null;
+  };
+
+  const refreshSessionsList = async (userId) => {
+    const sessions = await fetchPastSessions(userId);
+
+    if (mountedRef.current) {
+      setSessionsList(sessions);
+    }
+  };
+
   const streamAssistantReply = async (messageId, reply) => {
     const chunks = splitIntoStreamChunks(reply);
 
@@ -253,8 +437,8 @@ export function HomePage() {
         return;
       }
 
-      setChatHistory((history) =>
-        history.map((message) =>
+      setCurrentMessages((messages) =>
+        messages.map((message) =>
           message.id === messageId
             ? { ...message, content: `${message.content}${chunk}` }
             : message,
@@ -268,8 +452,8 @@ export function HomePage() {
       return;
     }
 
-    setChatHistory((history) =>
-      history.map((message) =>
+    setCurrentMessages((messages) =>
+      messages.map((message) =>
         message.id === messageId ? { ...message, isStreaming: false } : message,
       ),
     );
@@ -283,34 +467,59 @@ export function HomePage() {
       return;
     }
 
+    if (!currentUserId) {
+      showToast({
+        title: "Profile unavailable",
+        description: "Your OrangeHRM profile is still loading. Please try again in a moment.",
+        variant: "error",
+      });
+      return;
+    }
+
     keepInputFocusedRef.current = true;
-    setChatHistory((history) => [
-      ...history,
-      { id: crypto.randomUUID(), role: "user", content: trimmedMessage },
+    const userMessageId = crypto.randomUUID();
+    setCurrentMessages((messages) => [
+      ...messages,
+      { id: userMessageId, role: "user", content: trimmedMessage },
     ]);
     setInputValue("");
-    setPendingReplies((count) => count + 1);
+    setIsTyping(true);
     focusInputSoon();
 
     try {
       const authToken = await ensureValidAccessToken();
+      let nextSessionId = activeSessionId;
+
+      if (!nextSessionId) {
+        nextSessionId = await startNewSession(currentUserId, trimmedMessage);
+
+        if (mountedRef.current) {
+          setActiveSessionId(nextSessionId);
+        }
+      }
+
+      await saveMessage(nextSessionId, "user", trimmedMessage);
+
+      // AI response logic continues through the existing chat service.
       const reply = await sendChatMessage({
         message: trimmedMessage,
         authToken,
-        sessionId,
+        sessionId: nextSessionId,
       });
       const assistantMessageId = crypto.randomUUID();
 
-      setChatHistory((history) => [
-        ...history,
+      setCurrentMessages((messages) => [
+        ...messages,
         { id: assistantMessageId, role: "assistant", content: "", isStreaming: true },
       ]);
-      setPendingReplies((count) => Math.max(0, count - 1));
       await streamAssistantReply(assistantMessageId, reply);
+      await saveMessage(nextSessionId, "assistant", reply);
+      await refreshSessionsList(currentUserId);
+      setIsTyping(false);
     } catch (error) {
       console.error("Unable to send chat message:", error);
       if (error instanceof SessionExpiredError) {
-        setPendingReplies((count) => Math.max(0, count - 1));
+        setIsTyping(false);
         return;
       }
 
@@ -319,7 +528,7 @@ export function HomePage() {
         description: "AUFI could not reach the chat service. Please try again.",
         variant: "error",
       });
-      setPendingReplies((count) => Math.max(0, count - 1));
+      setIsTyping(false);
       focusInputSoon();
     }
   };
@@ -346,16 +555,40 @@ export function HomePage() {
 
   const handleNewChat = () => {
     keepInputFocusedRef.current = true;
-    setSessionId(crypto.randomUUID());
-    setChatHistory([]);
+    setActiveSessionId(null);
+    setCurrentMessages([]);
     setInputValue("");
-    setPendingReplies(0);
+    setIsTyping(false);
     focusInputSoon();
   };
 
   const handleQuickAction = (action) => {
     keepInputFocusedRef.current = true;
     sendMessage(action);
+  };
+
+  const handleHistorySelect = async (sessionId) => {
+    try {
+      const messages = await fetchSessionMessages(sessionId);
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      keepInputFocusedRef.current = true;
+      setActiveSessionId(sessionId);
+      setCurrentMessages(messages);
+      setIsTyping(false);
+      setIsHistoryOpen(false);
+      focusInputSoon();
+    } catch (error) {
+      console.error("Unable to load session messages:", error);
+      showToast({
+        title: "Chat unavailable",
+        description: "We couldn't load that conversation yet. Please try again.",
+        variant: "error",
+      });
+    }
   };
 
   return (
@@ -365,9 +598,97 @@ export function HomePage() {
     >
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,rgba(228,175,255,0.24)_0%,rgba(114,14,217,0.18)_23%,rgba(5,5,5,0)_58%)]" />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#E4AFFF]/30 to-transparent" />
+      <div
+        className={`absolute inset-0 z-20 bg-black/55 backdrop-blur-md transition-all duration-300 ease-out ${
+          isHistoryOpen
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0"
+        }`}
+        onClick={() => setIsHistoryOpen(false)}
+        aria-hidden={!isHistoryOpen}
+      />
 
+      <aside
+        className={`absolute inset-y-0 left-0 z-30 flex w-[288px] max-w-[84vw] flex-col border-r border-white/10 bg-[#090909]/95 px-4 pb-5 pt-4 shadow-[0_24px_80px_rgba(0,0,0,0.48)] backdrop-blur-2xl transition-transform duration-300 ease-out ${
+          isHistoryOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+        aria-label="Chat history"
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,#E4AFFF_0%,#720ED9_100%)] px-4 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(114,14,217,0.28)] transition duration-300 hover:shadow-[0_14px_32px_rgba(228,175,255,0.24)] focus:outline-none focus:ring-2 focus:ring-[#E4AFFF]/70"
+          >
+            <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+            New Chat
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsHistoryOpen(false)}
+            aria-label="Close history"
+            className="ml-2 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/65 transition duration-300 hover:bg-white/[0.09] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#E4AFFF]/70"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        <div className="scrollbar-hidden flex-1 overflow-y-auto pr-1">
+          {sessionsList.length > 0 ? (
+            <section>
+              <p className="mb-2 px-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
+                Recent chats
+              </p>
+              <div className="space-y-1">
+                {sessionsList.map((session) => {
+                  const isActive = session.id === activeSessionId;
+                  const sessionTitle = session.title?.trim() || "Untitled chat";
+
+                  return (
+                    <button
+                      key={session.id}
+                      type="button"
+                      onClick={() => handleHistorySelect(session.id)}
+                      className={`w-full rounded-2xl px-3 py-2.5 text-left text-sm leading-5 transition duration-200 ${
+                        isActive
+                          ? "bg-[#E4AFFF]/14 text-white shadow-[inset_0_0_0_1px_rgba(228,175,255,0.18)]"
+                          : "text-white/72 hover:bg-white/[0.06] hover:text-white"
+                      }`}
+                      title={sessionTitle}
+                    >
+                      <span className="block truncate">{sessionTitle}</span>
+                      <span className="mt-1 block text-[11px] text-white/35">
+                        {formatSessionDate(session.created_at)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.03] px-4 py-5 text-sm leading-6 text-white/45">
+              Past conversations will appear here once you start chatting.
+            </div>
+          )}
+        </div>
+      </aside>
+
+      <div
+        className={`relative z-10 transition-transform duration-300 ease-out ${
+          isHistoryOpen ? "translate-x-0 sm:translate-x-8 lg:translate-x-10" : "translate-x-0"
+        }`}
+      >
       <header className="relative z-10 flex h-20 items-center justify-between px-5 sm:px-8 lg:px-12">
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsHistoryOpen((open) => !open)}
+            aria-label="Toggle history sidebar"
+            title="History"
+            className="flex h-11 w-11 items-center justify-center rounded-xl border border-transparent bg-transparent text-white/70 transition duration-300 hover:border-white/10 hover:bg-white/[0.06] hover:text-white focus:outline-none focus:ring-2 focus:ring-[#E4AFFF]/70"
+          >
+            <History className="h-4.5 w-4.5" aria-hidden="true" />
+          </button>
           <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E4AFFF]/15 bg-white/[0.06] shadow-[0_0_28px_rgba(228,175,255,0.14)] backdrop-blur-xl">
             <Sparkles className="h-5 w-5 text-[#E4AFFF]" aria-hidden="true" />
           </div>
@@ -430,7 +751,7 @@ export function HomePage() {
             aria-live="polite"
           >
             <div className="space-y-6 py-4">
-              {chatHistory.map((message) => (
+              {currentMessages.map((message) => (
                 <div
                   key={message.id}
                   className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
@@ -462,7 +783,7 @@ export function HomePage() {
                 </div>
               ))}
 
-              {pendingReplies > 0 && (
+              {isTyping && (
                 <div className="flex justify-start" role="status" aria-label="AUFI is typing">
                   <div className="flex items-center gap-3 text-sm text-white/55">
                     <Sparkles className="h-4 w-4 animate-pulse text-[#E4AFFF]" aria-hidden="true" />
@@ -536,6 +857,7 @@ export function HomePage() {
           </div>
         )}
       </section>
+      </div>
 
       <style>{`
         .scrollbar-hidden {
