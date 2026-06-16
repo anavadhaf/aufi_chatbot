@@ -19,7 +19,9 @@ import { useAuthStore } from "../store/auth.store";
 import { showToast } from "../utils/toast";
 
 const STREAM_CHUNK_DELAY_MS = 28;
-const ORANGEHRM_PROFILE_URL = "/orange-api/web/index.php/api/v2/pim/myself";
+const ORANGEHRM_PROFILE_URL =
+  import.meta.env.VITE_ORANGEHRM_MYSELF_URL ||
+  "https://fox-heroic-hopelessly.ngrok-free.app/web/index.php/api/v2/pim/myself";
 const SESSION_TITLE_MAX_LENGTH = 30;
 
 const quickActions = [

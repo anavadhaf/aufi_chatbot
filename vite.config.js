@@ -3,20 +3,43 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+
   server: {
     proxy: {
-      // 1. Proxy for Authentication / Login requests
-      "/orangehrm-oauth": {
-        target: "http://localhost:8080",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/orangehrm-oauth/, ""),
-      },
-      
-      // 2. Proxy for Profile Fetching and standard API requests
       "/orange-api": {
-        target: "http://localhost:8080",
+        target: "https://fox-heroic-hopelessly.ngrok-free.app",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/orange-api/, ""),
+        secure: true,
+
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq) => {
+            proxyReq.setHeader(
+              "ngrok-skip-browser-warning",
+              "true"
+            );
+          });
+        },
+
+        rewrite: (path) =>
+          path.replace(/^\/orange-api/, ""),
+      },
+
+      "/orangehrm-oauth": {
+        target: "https://fox-heroic-hopelessly.ngrok-free.app",
+        changeOrigin: true,
+        secure: true,
+
+        configure: (proxy) => {
+          proxy.on("proxyReq", (proxyReq) => {
+            proxyReq.setHeader(
+              "ngrok-skip-browser-warning",
+              "true"
+            );
+          });
+        },
+
+        rewrite: (path) =>
+          path.replace(/^\/orangehrm-oauth/, ""),
       },
     },
   },
